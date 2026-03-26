@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -8,91 +7,133 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        #map { height: 100vh; width: 100%; background: #fdf5e6; }
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
-        .label-red { color: red; font-weight: bold; font-size: 14px; text-shadow: 2px 2px 0 #fff; white-space: nowrap; }
-        .my-location { width: 18px; height: 18px; background-color: #007bff; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
-
-        /* しおりボタン */
-        #shiori-btn {
-            position: absolute; bottom: 20px; right: 20px; padding: 12px 24px;
-            background: #ffc107; color: #333; border: none; border-radius: 30px;
-            font-size: 16px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 1000;
-        }
-
-        /* 7ページ対応スライドショー形式のオーバーレイ */
-        #shiori-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 2000; display: none;
-            flex-direction: column; justify-content: center; align-items: center;
-        }
-        #shiori-img { max-width: 95%; max-height: 80%; object-fit: contain; }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #fdf5e6; }
+        #map { height: 100vh; width: 100%; }
         
-        /* ページ切り替え用パーツ */
+        /* 徒歩時間表示パネル */
+        #timer-panel {
+            position: absolute; top: 0; left: 0; width: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px; font-size: 11px; color: #333;
+            z-index: 1000; display: flex; flex-wrap: wrap; gap: 8px;
+            border-bottom: 1px solid #ccc; justify-content: center;
+        }
+        .time-item { background: #eee; padding: 2px 6px; border-radius: 4px; border: 1px solid #ddd; }
+
+        /* ラベル（赤・青） */
+        .label-red { color: red; font-weight: bold; font-size: 13px; text-shadow: 2px 2px 0 #fff; white-space: nowrap; }
+        .label-blue { color: blue; font-weight: bold; font-size: 13px; text-shadow: 2px 2px 0 #fff; white-space: nowrap; }
+        .arrow-icon { font-size: 12px; margin: 0 2px; }
+
+        /* 現在地 */
+        .my-location { width: 18px; height: 18px; background-color: #007bff; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+        
+        /* しおりボタン・オーバーレイ */
+        #shiori-btn { position: absolute; bottom: 20px; right: 20px; padding: 12px 24px; background: #ffc107; color: #333; border: none; border-radius: 30px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 1000; }
+        #shiori-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; justify-content: center; align-items: center; }
+        #shiori-img { max-width: 95%; max-height: 80%; object-fit: contain; }
         .nav-controls { color: white; margin-top: 15px; display: flex; align-items: center; gap: 20px; }
         .nav-btn { background: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; }
-        #page-num { font-size: 18px; }
-        #close-btn { position: absolute; top: 20px; right: 20px; font-size: 35px; color: white; background: none; border: none; }
     </style>
 </head>
 <body>
+
+    <div id="timer-panel">現在地を取得中...</div>
     <div id="map"></div>
-    <button id="shiori-btn" onclick="openShiori()">📖 しおり(全7P)</button>
+    
+    <button id="shiori-btn" onclick="openShiori()">📖 しおり(全6P)</button>
 
     <div id="shiori-overlay">
-        <button id="close-btn" onclick="closeShiori()">&times;</button>
+        <button style="position:absolute;top:20px;right:20px;font-size:35px;color:white;background:none;border:none;" onclick="closeShiori()">&times;</button>
         <img id="shiori-img" src="shiori1.png">
         <div class="nav-controls">
             <button class="nav-btn" onclick="changePage(-1)">前へ</button>
-            <span id="page-num">1 / 7</span>
+            <span id="page-num">1 / 6</span>
             <button class="nav-btn" onclick="changePage(1)">次へ</button>
         </div>
     </div>
 
     <script>
-        // --- 地図設定 ---
-        const map = L.map('map', {
-            center: [35.6284, 134.8105], zoom: 16,
-            maxBounds: L.latLngBounds([35.610, 134.780], [35.675, 134.840]),
-            maxBoundsViscosity: 1.0, zoomControl: false
+        // --- 1. 移動範囲とズームの制限 ---
+        const southWest = L.latLng(35.6100000000, 134.7800000000); 
+        const northEast = L.latLng(35.6750000000, 134.8400000000); 
+        const bounds = L.latLngBounds(southWest, northEast);
+
+        const map = L.map('map', { 
+            center: [35.6260000000, 134.8100000000], 
+            zoom: 17, 
+            minZoom: 15,
+            maxZoom: 18, 
+            maxBounds: bounds, 
+            maxBoundsViscosity: 1.0,
+            zoomControl: false 
         });
+
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // --- 外湯・施設登録（前回の正確な位置と営業時間を継続） ---
+        // --- 2. スポットデータ (座標10桁 + 営業時間) ---
         const spots = [
-            { pos: [35.6242, 134.8143], name: "さとの湯", info: "13:00〜21:00 (月休)" },
-            { pos: [35.6253, 134.8122], name: "地蔵湯", info: "7:00〜23:00 (金休)" },
-            { pos: [35.6264, 134.8108], name: "柳湯", info: "15:00〜23:00 (木休)" },
-            { pos: [35.6266, 134.8099], name: "一の湯", info: "7:00〜23:00 (水休)" },
-            { pos: [35.6273, 134.8080], name: "御所の湯", info: "7:00〜23:00 (第1,3木休)" },
-            { pos: [35.6293, 134.8066], name: "まんだら湯", info: "15:00〜23:00 (水休)" },
-            { pos: [35.6310, 134.8056], name: "鴻の湯", info: "7:00〜23:00 (火休)" },
-            { pos: [35.6284, 134.8103], name: "西村屋本館", info: "チェックイン 15:00〜" },
-            { pos: [35.6666, 134.8317], name: "マリンワールド", info: "9:00〜17:00" }
+            { pos: [35.62376797213825, 134.8134372802512], name: "城崎温泉駅", type: "blue", dir: "left", info: "10:21か11:30か12:24か13:03か13:50か14:33か15:25か16:39" },
+            { pos: [35.62812908107669, 134.80072501960416], name: "ときわ別館", type: "blue", dir: "left", info: "チェックイン 15:00〜17:00" },
+            { pos: [35.65566940086042, 134.82540843069683], name: "マリンワールド", type: "blue", dir: "left", info: "9:30〜16:30JR城崎温泉駅にて全但バス乗車約10分。日和山バス停で下車。帰りは、11:50か12:49か14:13か15:03か16:08か16:59" },
+            { pos: [35.62440751320272, 134.8137773472244], name: "さとの湯", dir: "left", info: "13:00〜21:00 (月曜休)" },
+            { pos: [35.62692472799179, 134.81292398891952], name: "地蔵湯", dir: "left", info: "7:00〜23:00 (月曜休)" },
+            { pos: [35.62652992893928, 134.8104441294001], name: "柳湯", dir: "left", info: "15:00〜23:00 (木曜休)" },
+            { pos: [35.62623160927528, 134.80951625507254], name: "一の湯", dir: "left", info: "7:00〜23:00 (水曜休)" },
+            { pos: [35.62606869302958, 134.8076365009919], name: "御所の湯", dir: "left", info: "7:00〜23:00 (木曜休)" },
+            { pos: [35.6246370496531, 134.80597358891964], name: "まんだら湯", dir: "left", info: "15:00〜23:00 (水曜休)" },
+            { pos: [35.626319667121294, 134.8048388330973], name: "鴻の湯", dir: "left", info: "15:00〜23:00 (火曜休)" },
+            { pos: [35.626784095535164, 134.8126634838015], name: "TOKIWA GARDEN", dir: "right", info: "8:00〜18:00 (木曜休)" },
+            { pos: [35.62598010325519, 134.81305583169376], name: "但馬デリカ茶屋", dir: "right", info: "10:00〜17:00 (不定休)" },
+            { pos: [35.625078881855984, 134.81302251265427], name: "斉藤製菓店", dir: "right", info: "8:00〜16:00 (不定休)" },
+            { pos: [35.62638563357087, 134.8123092923189], name: "まつがみ", dir: "right", info: "11:00〜14:30 (火曜休)" },
+            { pos: [35.62675438332624, 134.812345434946], name: "寺子屋本舗", dir: "right", info: "9:30〜17:30 (年中無休)" },
+            { pos: [35.62613970908095, 134.80916381350514], name: "谷口屋遊技場", dir: "right", info: "20:00〜22:00 (不定休)" },
+            { pos: [35.62425852452025, 134.81281283708867], name: "足湯カフェ", dir: "right", info: "9:00〜18:00 (不定休)" },
+            { pos: [35.62660138714523, 134.8116842251455], name: "汸臼庵", dir: "right", info: "10:00〜17:00 (不定休)" }
         ];
 
+        // --- 3. マーカー描画 ---
         spots.forEach(s => {
-            const icon = L.divIcon({ className: 'c', html: `<div class='label-red'>← ${s.name}</div>`, iconSize: [120, 20] });
+            const colorClass = (s.type === "blue") ? "label-blue" : "label-red";
+            let html, iconAnchor;
+            if (s.dir === "right") {
+                html = `<div class='${colorClass}'>${s.name}<span class='arrow-icon'>→</span></div>`;
+                iconAnchor = [110, 10];
+            } else {
+                html = `<div class='${colorClass}'><span class='arrow-icon'>←</span>${s.name}</div>`;
+                iconAnchor = [0, 10];
+            }
+            const icon = L.divIcon({ className: 'c', html: html, iconSize: [110, 18], iconAnchor: iconAnchor });
             L.marker(s.pos, { icon: icon }).addTo(map).bindPopup(`<b>${s.name}</b><br>${s.info}`);
         });
 
-        // --- GPS現在地 ---
+        // --- 4. 現在地と徒歩計算 ---
         const myLoc = L.marker([0,0], { icon: L.divIcon({ className: 'my-location', iconSize:[18,18] }) });
         map.locate({ watch: true, enableHighAccuracy: true });
-        map.on('locationfound', e => { myLoc.setLatLng(e.latlng).addTo(map); });
+        map.on('locationfound', e => {
+            const cur = e.latlng;
+            myLoc.setLatLng(cur).addTo(map);
+            let html = "";
+            const targets = ["ときわ別館",  "城崎温泉駅"];
+            spots.filter(s => targets.includes(s.name)).forEach(s => {
+                const dist = cur.distanceTo(L.latLng(s.pos));
+                const mins = Math.ceil(dist / 80);
+                html += `<div class="time-item">${s.name}: 約${mins}分</div>`;
+            });
+            document.getElementById('timer-panel').innerHTML = html;
+        });
 
-        // --- 7ページしおり制御 ---
+        // --- 5. しおり機能 (全6Pに修正) ---
         let currentPage = 1;
         function openShiori() { document.getElementById('shiori-overlay').style.display = 'flex'; }
         function closeShiori() { document.getElementById('shiori-overlay').style.display = 'none'; }
-        
         function changePage(step) {
             currentPage += step;
             if (currentPage < 1) currentPage = 1;
-            if (currentPage > 7) currentPage = 7;
-            
+            if (currentPage > 6) currentPage = 6; // 最大を6に変更
             document.getElementById('shiori-img').src = `shiori${currentPage}.png`;
-            document.getElementById('page-num').innerText = `${currentPage} / 7`;
+            document.getElementById('page-num').innerText = `${currentPage} / 6`; // 表示も6に
         }
     </script>
 </body>
