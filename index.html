@@ -1,0 +1,99 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>城崎温泉 専属ナビ</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map { height: 100vh; width: 100%; background: #fdf5e6; }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        .label-red { color: red; font-weight: bold; font-size: 14px; text-shadow: 2px 2px 0 #fff; white-space: nowrap; }
+        .my-location { width: 18px; height: 18px; background-color: #007bff; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+
+        /* しおりボタン */
+        #shiori-btn {
+            position: absolute; bottom: 20px; right: 20px; padding: 12px 24px;
+            background: #ffc107; color: #333; border: none; border-radius: 30px;
+            font-size: 16px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 1000;
+        }
+
+        /* 7ページ対応スライドショー形式のオーバーレイ */
+        #shiori-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 2000; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+        }
+        #shiori-img { max-width: 95%; max-height: 80%; object-fit: contain; }
+        
+        /* ページ切り替え用パーツ */
+        .nav-controls { color: white; margin-top: 15px; display: flex; align-items: center; gap: 20px; }
+        .nav-btn { background: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; }
+        #page-num { font-size: 18px; }
+        #close-btn { position: absolute; top: 20px; right: 20px; font-size: 35px; color: white; background: none; border: none; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <button id="shiori-btn" onclick="openShiori()">📖 しおり(全7P)</button>
+
+    <div id="shiori-overlay">
+        <button id="close-btn" onclick="closeShiori()">&times;</button>
+        <img id="shiori-img" src="shiori1.png">
+        <div class="nav-controls">
+            <button class="nav-btn" onclick="changePage(-1)">前へ</button>
+            <span id="page-num">1 / 7</span>
+            <button class="nav-btn" onclick="changePage(1)">次へ</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 地図設定 ---
+        const map = L.map('map', {
+            center: [35.6284, 134.8105], zoom: 16,
+            maxBounds: L.latLngBounds([35.610, 134.780], [35.675, 134.840]),
+            maxBoundsViscosity: 1.0, zoomControl: false
+        });
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+
+        // --- 外湯・施設登録（前回の正確な位置と営業時間を継続） ---
+        const spots = [
+            { pos: [35.6242, 134.8143], name: "さとの湯", info: "13:00〜21:00 (月休)" },
+            { pos: [35.6253, 134.8122], name: "地蔵湯", info: "7:00〜23:00 (金休)" },
+            { pos: [35.6264, 134.8108], name: "柳湯", info: "15:00〜23:00 (木休)" },
+            { pos: [35.6266, 134.8099], name: "一の湯", info: "7:00〜23:00 (水休)" },
+            { pos: [35.6273, 134.8080], name: "御所の湯", info: "7:00〜23:00 (第1,3木休)" },
+            { pos: [35.6293, 134.8066], name: "まんだら湯", info: "15:00〜23:00 (水休)" },
+            { pos: [35.6310, 134.8056], name: "鴻の湯", info: "7:00〜23:00 (火休)" },
+            { pos: [35.6284, 134.8103], name: "西村屋本館", info: "チェックイン 15:00〜" },
+            { pos: [35.6666, 134.8317], name: "マリンワールド", info: "9:00〜17:00" }
+        ];
+
+        spots.forEach(s => {
+            const icon = L.divIcon({ className: 'c', html: `<div class='label-red'>← ${s.name}</div>`, iconSize: [120, 20] });
+            L.marker(s.pos, { icon: icon }).addTo(map).bindPopup(`<b>${s.name}</b><br>${s.info}`);
+        });
+
+        // --- GPS現在地 ---
+        const myLoc = L.marker([0,0], { icon: L.divIcon({ className: 'my-location', iconSize:[18,18] }) });
+        map.locate({ watch: true, enableHighAccuracy: true });
+        map.on('locationfound', e => { myLoc.setLatLng(e.latlng).addTo(map); });
+
+        // --- 7ページしおり制御 ---
+        let currentPage = 1;
+        function openShiori() { document.getElementById('shiori-overlay').style.display = 'flex'; }
+        function closeShiori() { document.getElementById('shiori-overlay').style.display = 'none'; }
+        
+        function changePage(step) {
+            currentPage += step;
+            if (currentPage < 1) currentPage = 1;
+            if (currentPage > 7) currentPage = 7;
+            
+            document.getElementById('shiori-img').src = `shiori${currentPage}.png`;
+            document.getElementById('page-num').innerText = `${currentPage} / 7`;
+        }
+    </script>
+</body>
+</html>
